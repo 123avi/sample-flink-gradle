@@ -1,0 +1,143 @@
+buildscript {
+    repositories {
+        jcenter() // this applies only to the Gradle 'Shadow' plugin
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    }
+}
+
+plugins {
+    id "java"
+    id "scala"
+    id "idea"
+    id "maven-publish"
+    id "com.github.johnrengelman.shadow" version "4.0.4"
+}
+
+// artifact properties
+group = 'com.neosec'
+version = '0.1-SNAPSHOT'
+description = """Flink Quickstart Job"""
+
+ext {
+    javaVersion = '1.8'
+    flinkVersion = '1.12.0'
+    scalaBinaryVersion = '2.12'
+    slf4jVersion = '1.7.15'
+    log4jVersion = '2.12.1'
+}
+
+sourceCompatibility = javaVersion
+targetCompatibility = javaVersion
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+//applicationDefaultJvmArgs = ["-Dlog4j.configurationFile=log4j2.properties"]
+
+wrapper {
+    gradleVersion = '6.8'
+}
+
+// declare where to find the dependencies of your project
+//repositories {
+//    mavenCentral()
+//    maven { url "https://repository.apache.org/content/repositories/snapshots/" }
+//}
+
+repositories {
+    jcenter()
+    mavenCentral()
+    maven {
+        url "http://maven.twttr.com"
+    }
+    maven { url "https://repository.apache.org/content/repositories/snapshots/" }
+}
+
+// NOTE: We cannot use "compileOnly" or "shadow" configurations since then we could not run code
+// in the IDE or with "gradle run". We also cannot exclude transitive dependencies from the
+// shadowJar yet (see https://github.com/johnrengelman/shadow/issues/159).
+// -> Explicitly define the // libraries we want to be included in the "flinkShadowJar" configuration!
+configurations {
+    flinkShadowJar // dependencies which go into the shadowJar
+
+    // always exclude these (also from transitive dependencies) since they are provided by Flink
+    flinkShadowJar.exclude group: 'org.apache.flink', module: 'force-shading'
+    flinkShadowJar.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+    flinkShadowJar.exclude group: 'org.slf4j'
+    flinkShadowJar.exclude group: 'org.apache.logging.log4j'
+}
+
+dependencies {
+
+    compile group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.2.0'
+
+    // flink
+    compile group: 'org.apache.flink', name: 'flink-java', version: flinkVersion
+
+    compile group: 'org.apache.flink', name: 'flink-streaming-scala_' + scalaBinaryVersion, version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-streaming-java_' + scalaBinaryVersion, version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-streaming-java_' + scalaBinaryVersion, version: flinkVersion, classifier: 'tests'
+    compile group: 'org.apache.flink', name: 'flink-metrics-datadog', version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-hadoop-compatibility_' + scalaBinaryVersion, version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-s3-fs-hadoop', version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-runtime-web_' + scalaBinaryVersion, version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-statebackend-rocksdb_' + scalaBinaryVersion, version: flinkVersion
+    compile group: 'org.apache.flink', name: 'flink-connector-kinesis_'+ scalaBinaryVersion, version: flinkVersion
+
+    // utils
+    compile group: 'com.typesafe', name: 'config', version: '1.3.3'
+
+    // logging
+//    compile group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
+//    compile group: 'org.slf4j', name: 'log4j-over-slf4j', version: '1.7.25'
+
+    // scala
+    compile 'org.scala-lang:scala-library:2.12.7'
+    compile 'org.scala-lang:scala-reflect:2.12.7'
+    compile 'org.scala-lang:scala-compiler:2.12.7'
+    compile group: 'com.lightbend.akka', name: 'akka-stream-alpakka-kinesis_'+ scalaBinaryVersion, version: '2.0.2'
+
+    compile group: 'com.amazonaws', name: 'aws-java-sdk-kinesis', version: '1.11.913'
+
+    compile group: 'io.spray', name: 'spray-json_'+scalaBinaryVersion, version: '1.3.6'
+
+    // testing
+    testCompile group: 'org.apache.flink', name: 'flink-test-utils-junit', version: flinkVersion
+    testCompile group: 'org.apache.flink', name: 'flink-core', version: flinkVersion, classifier: 'tests'
+    testCompile group: 'org.apache.flink', name: 'flink-test-utils_'+ scalaBinaryVersion, version: flinkVersion, classifier: 'tests'
+
+    testCompile group: 'org.scalatest', name: 'scalatest-flatspec_'+ scalaBinaryVersion, version: '3.2.3'
+    testCompile group: 'org.scalatest', name: 'scalatest_'+ scalaBinaryVersion, version: '3.2.3'
+
+    testImplementation('org.junit.jupiter:junit-jupiter:5.7.0')
+
+}
+
+// make compileOnly dependencies available for tests:
+sourceSets {
+    main.compileClasspath += configurations.flinkShadowJar
+    main.runtimeClasspath += configurations.flinkShadowJar
+
+    test.compileClasspath += configurations.flinkShadowJar
+    test.runtimeClasspath += configurations.flinkShadowJar
+
+    javadoc.classpath += configurations.flinkShadowJar
+}
+
+//run.classpath = sourceSets.main.runtimeClasspath
+jar {
+    manifest {
+        attributes 'Built-By': System.getProperty('user.name'),
+                'Build-Jdk': System.getProperty('java.version')
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.flinkShadowJar]
+}
+
+test {
+    useJUnitPlatform()
+}
